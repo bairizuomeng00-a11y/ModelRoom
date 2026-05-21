@@ -11,7 +11,7 @@ ModelRoom 是一个原生 macOS 多模型聊天应用。它可以让你自由配
 这个项目适合想在 Mac 上统一管理多个 AI 模型、对比模型回答、测试第三方兼容接口，或者搭建个人多模型工作台的用户。
 
 ## Features
-
+- During the chat, each model isolates the context and does not interfere with each other.
 - Native SwiftUI macOS interface with a Liquid Glass-inspired design
 - OpenAI-compatible Chat Completions and Anthropic Messages-compatible API support
 - Per-provider local configuration files
