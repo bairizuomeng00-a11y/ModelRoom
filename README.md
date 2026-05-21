@@ -26,7 +26,6 @@ ModelRoom 是一个原生 macOS 多模型聊天应用。它可以让你自由配
 ModelRoom stores runtime configuration on your Mac, not in the app bundle.
 
 - Provider configs are stored under `~/Library/Application Support/ModelRoom/Providers/`.
-- API keys are stored as plaintext in local provider config files by design.
 - Chat and folder metadata are stored in local app preferences.
 
 
