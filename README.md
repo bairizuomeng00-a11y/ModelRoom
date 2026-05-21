@@ -20,7 +20,7 @@ ModelRoom 是一个原生 macOS 多模型聊天应用。它可以让你自由配
 - Chinese and English interface modes
 - Conversation history with nested folders and drag-and-drop organization
 - Markdown-style rendering for code blocks, tables, and math-style formulas
-- DMG packaging script for local distribution
+
 
 ## Privacy
 
@@ -29,38 +29,14 @@ ModelRoom stores runtime configuration on your Mac, not in the app bundle.
 - Provider configs are stored under `~/Library/Application Support/ModelRoom/Providers/`.
 - API keys are stored as plaintext in local provider config files by design.
 - Chat and folder metadata are stored in local app preferences.
-- The packaged DMG only contains the app bundle and does not include your local chats or API keys.
 
-Do not commit files from `~/Library/Application Support/ModelRoom` or local preference files.
+
 
 ## Requirements
 
 - macOS 13 or later
 - Swift 6 toolchain
 
-## Build
-
-```bash
-swift build
-```
-
-## Run Locally
-
-```bash
-./script/build_and_run.sh
-```
-
-## Package DMG
-
-```bash
-./script/package_dmg.sh
-```
-
-The generated installer will be written to:
-
-```text
-dist/ModelRoom.dmg
-```
 
 ## License
 
