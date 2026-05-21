@@ -1,0 +1,16 @@
+.DS_Store
+.build/
+.swiftpm/
+.codex/
+dist/
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# Local runtime data should never be committed.
+Providers/
+*.local
+*.log
+*.plist
+
