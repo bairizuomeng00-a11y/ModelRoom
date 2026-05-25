@@ -11,8 +11,16 @@ struct RenderedMessageView: View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 switch block {
+                case let .heading(level, text):
+                    HeadingBlockView(level: level, text: text)
                 case let .paragraph(text):
                     ParagraphBlockView(text: text)
+                case let .list(ordered, items):
+                    MarkdownListView(ordered: ordered, items: items)
+                case let .quote(text):
+                    QuoteBlockView(text: text)
+                case .divider:
+                    DividerBlockView()
                 case let .code(language, code):
                     CodeBlockView(language: language, code: code)
                 case let .table(headers, rows):
@@ -27,7 +35,11 @@ struct RenderedMessageView: View {
 }
 
 private enum RenderedMessageBlock {
+    case heading(level: Int, text: String)
     case paragraph(String)
+    case list(ordered: Bool, items: [String])
+    case quote(String)
+    case divider
     case code(language: String?, code: String)
     case table(headers: [String], rows: [[String]])
     case math(String)
@@ -71,6 +83,44 @@ private enum RenderedMessageParser {
                 continue
             }
 
+            if let heading = parseHeading(trimmed) {
+                flushParagraph()
+                blocks.append(.heading(level: heading.level, text: heading.text))
+                index += 1
+                continue
+            }
+
+            if isDivider(trimmed) {
+                flushParagraph()
+                blocks.append(.divider)
+                index += 1
+                continue
+            }
+
+            if trimmed.hasPrefix(">") {
+                flushParagraph()
+                let parsed = parseQuote(lines: lines, startIndex: index)
+                blocks.append(.quote(parsed.text))
+                index = parsed.nextIndex
+                continue
+            }
+
+            if unorderedListItem(in: line) != nil {
+                flushParagraph()
+                let parsed = parseList(lines: lines, startIndex: index, ordered: false)
+                blocks.append(.list(ordered: false, items: parsed.items))
+                index = parsed.nextIndex
+                continue
+            }
+
+            if orderedListItem(in: line) != nil {
+                flushParagraph()
+                let parsed = parseList(lines: lines, startIndex: index, ordered: true)
+                blocks.append(.list(ordered: true, items: parsed.items))
+                index = parsed.nextIndex
+                continue
+            }
+
             if trimmed.hasPrefix("$$") {
                 flushParagraph()
                 let parsed = parseDollarMath(lines: lines, startIndex: index)
@@ -105,6 +155,88 @@ private enum RenderedMessageParser {
 
         flushParagraph()
         return blocks.isEmpty ? [.paragraph(content)] : blocks
+    }
+
+    private static func parseHeading(_ trimmed: String) -> (level: Int, text: String)? {
+        let level = trimmed.prefix { $0 == "#" }.count
+        guard (1...6).contains(level),
+              trimmed.dropFirst(level).first == " " else {
+            return nil
+        }
+
+        let text = String(trimmed.dropFirst(level))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : (level, text)
+    }
+
+    private static func isDivider(_ trimmed: String) -> Bool {
+        guard trimmed.count >= 3 else { return false }
+        let characters = Set(trimmed)
+        return characters == ["-"] || characters == ["*"] || characters == ["_"]
+    }
+
+    private static func parseQuote(lines: [String], startIndex: Int) -> (text: String, nextIndex: Int) {
+        var quoteLines: [String] = []
+        var index = startIndex
+
+        while index < lines.count {
+            let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix(">") else { break }
+            let stripped = String(trimmed.dropFirst())
+                .trimmingCharacters(in: .whitespaces)
+            quoteLines.append(stripped)
+            index += 1
+        }
+
+        return (quoteLines.joined(separator: "\n"), index)
+    }
+
+    private static func parseList(lines: [String], startIndex: Int, ordered: Bool) -> (items: [String], nextIndex: Int) {
+        var items: [String] = []
+        var index = startIndex
+
+        while index < lines.count {
+            let item = ordered ? orderedListItem(in: lines[index]) : unorderedListItem(in: lines[index])
+            guard let item else { break }
+            items.append(item)
+            index += 1
+        }
+
+        return (items, index)
+    }
+
+    private static func unorderedListItem(in line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.count >= 3 else { return nil }
+        let markers = ["- ", "* ", "+ "]
+        guard let marker = markers.first(where: { trimmed.hasPrefix($0) }) else { return nil }
+        let item = String(trimmed.dropFirst(marker.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return item.isEmpty ? nil : item
+    }
+
+    private static func orderedListItem(in line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        var cursor = trimmed.startIndex
+        var hasDigit = false
+
+        while cursor < trimmed.endIndex, trimmed[cursor].isNumber {
+            hasDigit = true
+            cursor = trimmed.index(after: cursor)
+        }
+
+        guard hasDigit,
+              cursor < trimmed.endIndex,
+              trimmed[cursor] == "." || trimmed[cursor] == ")" else {
+            return nil
+        }
+
+        cursor = trimmed.index(after: cursor)
+        guard cursor < trimmed.endIndex, trimmed[cursor].isWhitespace else { return nil }
+
+        let item = String(trimmed[cursor...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return item.isEmpty ? nil : item
     }
 
     private static func parseDollarMath(lines: [String], startIndex: Int) -> (formula: String, nextIndex: Int) {
@@ -220,10 +352,85 @@ private struct ParagraphBlockView: View {
     var text: String
 
     var body: some View {
-        InlineMathText(text)
+        MarkdownInlineText(text)
             .font(.system(size: 15.5))
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct HeadingBlockView: View {
+    var level: Int
+    var text: String
+
+    var body: some View {
+        MarkdownInlineText(text)
+            .font(.system(size: fontSize, weight: .semibold))
+            .textSelection(.enabled)
+            .padding(.top, level <= 2 ? 4 : 1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var fontSize: CGFloat {
+        switch level {
+        case 1: 22
+        case 2: 19
+        case 3: 17
+        default: 15.8
+        }
+    }
+}
+
+private struct MarkdownListView: View {
+    var ordered: Bool
+    var items: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(ordered ? "\(index + 1)." : "•")
+                        .font(.system(size: 15.5, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: ordered ? 28 : 18, alignment: .trailing)
+
+                    MarkdownInlineText(item)
+                        .font(.system(size: 15.5))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .textSelection(.enabled)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct QuoteBlockView: View {
+    var text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(Color.accentColor.opacity(0.38))
+                .frame(width: 3)
+
+            MarkdownInlineText(text)
+                .font(.system(size: 15.5))
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct DividerBlockView: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.12))
+            .frame(height: 1)
+            .padding(.vertical, 4)
     }
 }
 
@@ -265,13 +472,18 @@ private struct CodeBlockView: View {
 private struct MarkdownTableView: View {
     var headers: [String]
     var rows: [[String]]
+    @State private var selectedCell: TableCellDetail?
 
     var body: some View {
         ScrollView(.horizontal) {
             VStack(alignment: .leading, spacing: 0) {
-                TableRowView(cells: headers, isHeader: true)
-                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    TableRowView(cells: row, isHeader: false)
+                TableRowView(cells: headers, headers: headers, isHeader: true, rowIndex: nil) { detail in
+                    selectedCell = detail
+                }
+                ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
+                    TableRowView(cells: row, headers: headers, isHeader: false, rowIndex: rowIndex) { detail in
+                        selectedCell = detail
+                    }
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -280,27 +492,86 @@ private struct MarkdownTableView: View {
                     .strokeBorder(.white.opacity(0.18), lineWidth: 1)
             }
         }
+        .popover(item: $selectedCell, arrowEdge: .bottom) { detail in
+            TableCellDetailView(detail: detail)
+        }
     }
+}
+
+private struct TableCellDetail: Identifiable {
+    let id = UUID()
+    var title: String
+    var content: String
 }
 
 private struct TableRowView: View {
     var cells: [String]
+    var headers: [String]
     var isHeader: Bool
+    var rowIndex: Int?
+    var onSelect: (TableCellDetail) -> Void
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(Array(cells.enumerated()), id: \.offset) { _, cell in
-                Text(cell)
-                    .font(isHeader ? .system(size: 15.5, weight: .semibold) : .system(size: 15.5))
-                    .textSelection(.enabled)
-                    .lineLimit(nil)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .frame(minWidth: 130, maxWidth: 260, alignment: .leading)
-                    .background(isHeader ? Color.primary.opacity(0.07) : Color(nsColor: .controlBackgroundColor).opacity(0.45))
-                    .border(Color.primary.opacity(0.08), width: 0.5)
+            ForEach(Array(cells.enumerated()), id: \.offset) { columnIndex, cell in
+                Button {
+                    onSelect(detail(for: cell, columnIndex: columnIndex))
+                } label: {
+                    MarkdownInlineText(softWrapped(cell))
+                        .font(isHeader ? .system(size: 15.5, weight: .semibold) : .system(size: 15.5))
+                        .lineLimit(isHeader ? 2 : 3)
+                        .truncationMode(.tail)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .frame(width: 190, height: isHeader ? 48 : 74, alignment: .topLeading)
+                        .background(isHeader ? Color.primary.opacity(0.07) : Color(nsColor: .controlBackgroundColor).opacity(0.45))
+                        .border(Color.primary.opacity(0.08), width: 0.5)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(cell)
             }
         }
+    }
+
+    private func detail(for content: String, columnIndex: Int) -> TableCellDetail {
+        let fallbackTitle = rowIndex.map { "Row \($0 + 1), Column \(columnIndex + 1)" } ?? "Header \(columnIndex + 1)"
+        let title = headers.indices.contains(columnIndex) && !headers[columnIndex].isEmpty
+            ? headers[columnIndex]
+            : fallbackTitle
+        return TableCellDetail(title: title, content: content)
+    }
+}
+
+private struct TableCellDetailView: View {
+    var detail: TableCellDetail
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(detail.title)
+                .font(.headline)
+                .lineLimit(2)
+
+            ScrollView {
+                MarkdownInlineText(softWrapped(detail.content))
+                    .font(.system(size: 15.5))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(12)
+            }
+            .frame(width: 420, height: 240)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.72))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
+            }
+        }
+        .padding(14)
+        .frame(width: 450)
     }
 }
 
@@ -331,14 +602,14 @@ private struct MathBlockView: View {
     }
 }
 
-private func InlineMathText(_ text: String) -> Text {
+private func MarkdownInlineText(_ text: String) -> Text {
     var result = Text("")
     var remaining = text[...]
 
     while let range = nextInlineMathRange(in: remaining) {
         let before = String(remaining[..<range.lowerBound])
         if !before.isEmpty {
-            result = result + Text(before)
+            result = result + markdownText(before)
         }
 
         let rawMath = String(remaining[range])
@@ -358,8 +629,40 @@ private func InlineMathText(_ text: String) -> Text {
 
     let tail = String(remaining)
     if !tail.isEmpty {
-        result = result + Text(tail)
+        result = result + markdownText(tail)
     }
+    return result
+}
+
+private func markdownText(_ text: String) -> Text {
+    do {
+        var options = AttributedString.MarkdownParsingOptions()
+        options.interpretedSyntax = .inlineOnlyPreservingWhitespace
+        let attributed = try AttributedString(markdown: text, options: options)
+        return Text(attributed)
+    } catch {
+        return Text(text)
+    }
+}
+
+private func softWrapped(_ text: String) -> String {
+    var result = ""
+    var runLength = 0
+
+    for character in text {
+        if character.isWhitespace {
+            runLength = 0
+            result.append(character)
+            continue
+        }
+
+        if runLength > 0 && runLength.isMultiple(of: 34) {
+            result.append("\u{200B}")
+        }
+        result.append(character)
+        runLength += 1
+    }
+
     return result
 }
 

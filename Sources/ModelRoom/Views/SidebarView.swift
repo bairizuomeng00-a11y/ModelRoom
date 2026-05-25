@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -53,6 +54,7 @@ struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
 
             HStack(spacing: 10) {
                 Label(model.language.modelsReady(model.runnableProviders.count), systemImage: "cpu")
@@ -64,6 +66,7 @@ struct SidebarView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
         }
+        .background(SidebarBackground())
     }
 
     private func handleDrop(providers: [NSItemProvider], destinationFolderID: UUID?) -> Bool {
@@ -83,6 +86,68 @@ struct SidebarView: View {
             didHandle = true
         }
         return didHandle
+    }
+}
+
+private struct SidebarBackground: View {
+    var body: some View {
+        ZStack {
+            SidebarVisualEffectView()
+
+            LinearGradient(
+                colors: [
+                    Color.white.opacity(0.10),
+                    Color(nsColor: .controlBackgroundColor).opacity(0.045),
+                    Color.black.opacity(0.010)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .blendMode(.plusLighter)
+
+            LinearGradient(
+                colors: [
+                    Color.accentColor.opacity(0.026),
+                    Color.cyan.opacity(0.016),
+                    .clear
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottom
+            )
+            .blendMode(.plusLighter)
+        }
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            .white.opacity(0.36),
+                            .black.opacity(0.020)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: 1)
+        }
+    }
+}
+
+private struct SidebarVisualEffectView: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .sidebar
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.isEmphasized = false
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {
+        view.material = .sidebar
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.isEmphasized = false
     }
 }
 

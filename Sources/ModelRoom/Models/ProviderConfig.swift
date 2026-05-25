@@ -12,6 +12,7 @@ struct ProviderConfig: Identifiable, Codable, Equatable {
     var systemPrompt: String
     var temperature: Double
     var maxTokens: Int
+    var thinkingMode: ThinkingMode
     var isEnabled: Bool
 
     init(
@@ -26,6 +27,7 @@ struct ProviderConfig: Identifiable, Codable, Equatable {
         systemPrompt: String = "",
         temperature: Double = 0.7,
         maxTokens: Int = 1200,
+        thinkingMode: ThinkingMode = .off,
         isEnabled: Bool = true
     ) {
         self.id = id
@@ -39,6 +41,7 @@ struct ProviderConfig: Identifiable, Codable, Equatable {
         self.systemPrompt = systemPrompt
         self.temperature = temperature
         self.maxTokens = maxTokens
+        self.thinkingMode = thinkingMode
         self.isEnabled = isEnabled
     }
 
@@ -63,6 +66,7 @@ struct StoredProviderConfig: Identifiable, Codable {
     var systemPrompt: String
     var temperature: Double
     var maxTokens: Int
+    var thinkingMode: ThinkingMode?
     var isEnabled: Bool
 
     init(_ provider: ProviderConfig) {
@@ -77,6 +81,7 @@ struct StoredProviderConfig: Identifiable, Codable {
         systemPrompt = provider.systemPrompt
         temperature = provider.temperature
         maxTokens = provider.maxTokens
+        thinkingMode = provider.thinkingMode
         isEnabled = provider.isEnabled
     }
 
@@ -93,6 +98,7 @@ struct StoredProviderConfig: Identifiable, Codable {
             systemPrompt: systemPrompt,
             temperature: temperature,
             maxTokens: maxTokens,
+            thinkingMode: thinkingMode ?? .off,
             isEnabled: isEnabled
         )
     }

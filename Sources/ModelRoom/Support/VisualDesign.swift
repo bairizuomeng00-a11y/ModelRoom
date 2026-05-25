@@ -126,12 +126,12 @@ private struct GlassRowBackgroundModifier: ViewModifier {
                 if isActive {
                     shape
                         .fill(.ultraThinMaterial)
-                        .opacity(isSelected ? 0.86 : 0.60)
+                        .opacity(isSelected ? 0.62 : 0.36)
                 }
             }
             .overlay {
                 if isActive {
-                    shape.strokeBorder(.white.opacity(isSelected ? 0.42 : 0.24), lineWidth: 1)
+                    shape.strokeBorder(.white.opacity(isSelected ? 0.50 : 0.30), lineWidth: 1)
                 }
             }
             .shadow(

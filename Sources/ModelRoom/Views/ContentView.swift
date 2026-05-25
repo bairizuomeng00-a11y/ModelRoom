@@ -16,7 +16,12 @@ struct ContentView: View {
             ConversationView()
                 .frame(minWidth: 480)
         }
+        .background(WindowTransparencyConfigurator())
         .animation(.spring(response: 0.24, dampingFraction: 0.86), value: isSidebarVisible)
+        .overlay(alignment: .bottom) {
+            UndoDeletionToastView()
+        }
+        .animation(.spring(response: 0.22, dampingFraction: 0.84), value: model.pendingUndoDeletion?.id)
         .toolbar {
             ToolbarItemGroup {
                 Button {
@@ -52,5 +57,27 @@ struct ContentView: View {
                 }
             }
         }
+    }
+}
+
+private struct WindowTransparencyConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async {
+            configure(window: view.window)
+        }
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async {
+            configure(window: view.window)
+        }
+    }
+
+    private func configure(window: NSWindow?) {
+        guard let window else { return }
+        window.isOpaque = false
+        window.backgroundColor = .clear
     }
 }

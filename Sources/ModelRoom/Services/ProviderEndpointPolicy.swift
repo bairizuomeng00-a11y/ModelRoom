@@ -51,6 +51,9 @@ enum ProviderEndpointPolicy {
             if path.contains("/chat/completions") {
                 return "Anthropic Messages must use a messages endpoint, usually /v1/messages."
             }
+            if provider.thinkingMode.isEnabled && provider.maxTokens <= 1024 {
+                return "Anthropic thinking mode requires Max Context to be greater than 1024."
+            }
         case .openAICompatible:
             if path.contains("/messages") || provider.baseURL.lowercased().contains("/anthropic") {
                 return "OpenAI Compatible cannot use an Anthropic messages endpoint. Change API Type to Anthropic Messages."

@@ -69,6 +69,8 @@ struct ModelAnswer: Identifiable, Equatable, Codable {
     var modelName: String
     var status: AnswerStatus
     var content: String
+    var thinkingContent: String? = nil
+    var reasoningTokenCount: Int? = nil
     var startedAt: Date
     var finishedAt: Date?
 
@@ -76,5 +78,10 @@ struct ModelAnswer: Identifiable, Equatable, Codable {
         guard let finishedAt else { return "" }
         let seconds = finishedAt.timeIntervalSince(startedAt)
         return String(format: "%.1fs", seconds)
+    }
+
+    var hasThinkingDetails: Bool {
+        thinkingContent?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ||
+            reasoningTokenCount != nil
     }
 }

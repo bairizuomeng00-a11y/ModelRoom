@@ -3,6 +3,7 @@ import SwiftUI
 struct ComposerView: View {
     @EnvironmentObject private var model: AppModel
     @State private var isPromptFocused = false
+    @State private var isPromptComposing = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -13,13 +14,17 @@ struct ComposerView: View {
 
             VStack(alignment: .leading, spacing: controlsGap) {
                 ZStack(alignment: .topLeading) {
-                    PromptTextView(text: $model.prompt, isFocused: $isPromptFocused)
+                    PromptTextView(
+                        text: $model.prompt,
+                        isFocused: $isPromptFocused,
+                        isComposingText: $isPromptComposing
+                    )
                         .frame(height: promptHeight)
                         .padding(.horizontal, 10)
                         .padding(.top, 8)
                         .padding(.bottom, 6)
 
-                    if model.prompt.isEmpty {
+                    if model.prompt.isEmpty && !isPromptComposing {
                         Text(model.language.text(.askOnce))
                             .font(.system(size: 15.5))
                             .foregroundStyle(.secondary.opacity(0.70))

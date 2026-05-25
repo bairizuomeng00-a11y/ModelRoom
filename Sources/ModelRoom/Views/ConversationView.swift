@@ -102,6 +102,7 @@ private struct AnswerCard: View {
     var answer: ModelAnswer
     var language: AppLanguage
     @State private var isHovering = false
+    @State private var isThinkingExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -135,6 +136,14 @@ private struct AnswerCard: View {
                     .foregroundStyle(.red)
                     .textSelection(.enabled)
             case .finished:
+                if answer.hasThinkingDetails {
+                    ThinkingDetailsView(
+                        answer: answer,
+                        language: language,
+                        isExpanded: $isThinkingExpanded
+                    )
+                }
+
                 RenderedMessageView(content: answer.content)
             }
         }
@@ -148,6 +157,78 @@ private struct AnswerCard: View {
         }
         .animation(.easeInOut(duration: 0.18), value: answer.status)
         .onHover { isHovering = $0 }
+    }
+}
+
+private struct ThinkingDetailsView: View {
+    var answer: ModelAnswer
+    var language: AppLanguage
+    @Binding var isExpanded: Bool
+
+    private var thinkingText: String {
+        answer.thinkingContent?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 14)
+
+                    Label(language.text(.thinkingDetails), systemImage: "brain.head.profile")
+                        .font(.system(size: 13.5, weight: .semibold))
+
+                    if let count = answer.reasoningTokenCount {
+                        Text("\(language.text(.reasoningTokens)): \(count)")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    if !thinkingText.isEmpty {
+                        RenderedMessageView(content: thinkingText)
+                    }
+
+                    if let count = answer.reasoningTokenCount, thinkingText.isEmpty {
+                        Text("\(language.text(.reasoningTokens)): \(count)")
+                            .font(.system(size: 15.5))
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.07))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.accentColor.opacity(0.16), lineWidth: 1)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.42))
+        }
     }
 }
 

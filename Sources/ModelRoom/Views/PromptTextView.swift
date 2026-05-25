@@ -4,6 +4,7 @@ import SwiftUI
 struct PromptTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var isFocused: Bool
+    @Binding var isComposingText: Bool
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -39,6 +40,11 @@ struct PromptTextView: NSViewRepresentable {
                 isFocused = focused
             }
         }
+        textView.markedTextChanged = { isComposing in
+            DispatchQueue.main.async {
+                isComposingText = isComposing
+            }
+        }
 
         scrollView.documentView = textView
         context.coordinator.textView = textView
@@ -48,10 +54,13 @@ struct PromptTextView: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.parent = self
         guard let textView = scrollView.documentView as? FocusReportingTextView else { return }
-        if textView.string != text {
+        if textView.string != text && !textView.hasMarkedText() {
             textView.string = text
         }
         textView.font = .systemFont(ofSize: 15.5)
+        DispatchQueue.main.async {
+            isComposingText = textView.hasMarkedText()
+        }
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
@@ -65,6 +74,7 @@ struct PromptTextView: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }
             parent.text = textView.string
+            parent.isComposingText = textView.hasMarkedText()
         }
 
         func textDidBeginEditing(_ notification: Notification) {
@@ -79,6 +89,7 @@ struct PromptTextView: NSViewRepresentable {
 
 final class FocusReportingTextView: NSTextView {
     var focusChanged: ((Bool) -> Void)?
+    var markedTextChanged: ((Bool) -> Void)?
 
     override func becomeFirstResponder() -> Bool {
         let didBecome = super.becomeFirstResponder()
@@ -92,7 +103,23 @@ final class FocusReportingTextView: NSTextView {
         let didResign = super.resignFirstResponder()
         if didResign {
             focusChanged?(false)
+            markedTextChanged?(false)
         }
         return didResign
+    }
+
+    override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
+        markedTextChanged?(hasMarkedText())
+    }
+
+    override func unmarkText() {
+        super.unmarkText()
+        markedTextChanged?(hasMarkedText())
+    }
+
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        super.insertText(string, replacementRange: replacementRange)
+        markedTextChanged?(hasMarkedText())
     }
 }

@@ -2,6 +2,8 @@ import Foundation
 
 struct ModelReply {
     var text: String
+    var thinking: String?
+    var reasoningTokenCount: Int?
 }
 
 struct ChatRequestMessage: Sendable {
@@ -75,7 +77,8 @@ struct ModelAPIClient {
             model: provider.model,
             messages: requestMessages,
             temperature: provider.temperature,
-            max_tokens: provider.maxTokens
+            max_tokens: provider.maxTokens,
+            reasoning_effort: provider.thinkingMode.openAIReasoningEffort
         )
 
         var request = try makeRequest(provider: provider)
@@ -88,14 +91,21 @@ struct ModelAPIClient {
               !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ModelAPIError.missingContent
         }
-        return ModelReply(text: content)
+        return ModelReply(
+            text: content,
+            thinking: nil,
+            reasoningTokenCount: response.usage?.completion_tokens_details?.reasoning_tokens
+        )
     }
 
     private func sendAnthropicMessages(messages: [ChatRequestMessage], provider: ProviderConfig) async throws -> ModelReply {
         let body = AnthropicRequest(
             model: provider.model,
             max_tokens: provider.maxTokens,
-            temperature: provider.temperature,
+            temperature: provider.thinkingMode.isEnabled ? nil : provider.temperature,
+            thinking: provider.thinkingMode.anthropicBudgetTokens(maxTokens: provider.maxTokens).map {
+                AnthropicThinking(type: "enabled", budget_tokens: $0)
+            },
             system: provider.systemPrompt.isEmpty ? nil : provider.systemPrompt,
             messages: normalizedAnthropicMessages(messages)
         )
@@ -111,7 +121,12 @@ struct ModelAPIClient {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ModelAPIError.missingContent
         }
-        return ModelReply(text: text)
+        let thinking = response.content.compactMap(\.thinkingText).joined(separator: "\n\n")
+        return ModelReply(
+            text: text,
+            thinking: thinking.isEmpty ? nil : thinking,
+            reasoningTokenCount: nil
+        )
     }
 
     private func normalizedAnthropicMessages(_ messages: [ChatRequestMessage]) -> [AnthropicMessage] {
@@ -205,10 +220,12 @@ private struct OpenAIRequest: Encodable {
     var messages: [[String: String]]
     var temperature: Double
     var max_tokens: Int
+    var reasoning_effort: String?
 }
 
 private struct OpenAIResponse: Decodable {
     var choices: [Choice]
+    var usage: Usage?
 
     struct Choice: Decodable {
         var message: Message
@@ -217,14 +234,28 @@ private struct OpenAIResponse: Decodable {
     struct Message: Decodable {
         var content: String?
     }
+
+    struct Usage: Decodable {
+        var completion_tokens_details: CompletionTokensDetails?
+    }
+
+    struct CompletionTokensDetails: Decodable {
+        var reasoning_tokens: Int?
+    }
 }
 
 private struct AnthropicRequest: Encodable {
     var model: String
     var max_tokens: Int
-    var temperature: Double
+    var temperature: Double?
+    var thinking: AnthropicThinking?
     var system: String?
     var messages: [AnthropicMessage]
+}
+
+private struct AnthropicThinking: Encodable {
+    var type: String
+    var budget_tokens: Int
 }
 
 private struct AnthropicMessage: Encodable {
@@ -238,5 +269,18 @@ private struct AnthropicResponse: Decodable {
     struct ContentBlock: Decodable {
         var type: String
         var text: String?
+        var thinking: String?
+        var data: String?
+
+        var thinkingText: String? {
+            switch type {
+            case "thinking":
+                return thinking?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? thinking : nil
+            case "redacted_thinking":
+                return data?.isEmpty == false ? "Provider returned a redacted thinking block." : nil
+            default:
+                return nil
+            }
+        }
     }
 }

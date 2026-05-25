@@ -25,6 +25,14 @@ enum AppLanguage: String, CaseIterable, Codable, Identifiable {
         case (.simplifiedChinese, .deleteChat): "删除聊天"
         case (.english, .deleteFolder): "Delete Folder"
         case (.simplifiedChinese, .deleteFolder): "删除文件夹"
+        case (.english, .chatDeleted): "Chat deleted"
+        case (.simplifiedChinese, .chatDeleted): "已删除聊天"
+        case (.english, .modelDeleted): "Model configuration deleted"
+        case (.simplifiedChinese, .modelDeleted): "已删除模型配置"
+        case (.english, .folderDeleted): "Folder deleted"
+        case (.simplifiedChinese, .folderDeleted): "已删除文件夹"
+        case (.english, .undo): "Undo"
+        case (.simplifiedChinese, .undo): "撤回"
         case (.english, .settings): "Settings"
         case (.simplifiedChinese, .settings): "设置"
         case (.english, .toggleSidebar): "Toggle Sidebar"
@@ -75,6 +83,18 @@ enum AppLanguage: String, CaseIterable, Codable, Identifiable {
         case (.simplifiedChinese, .model): "模型"
         case (.english, .resetEndpoint): "Reset Endpoint"
         case (.simplifiedChinese, .resetEndpoint): "重置端点"
+        case (.english, .manualUpdate): "Update"
+        case (.simplifiedChinese, .manualUpdate): "手动更新"
+        case (.english, .checkingUpdate): "Checking..."
+        case (.simplifiedChinese, .checkingUpdate): "正在检查..."
+        case (.english, .downloadingUpdate): "Downloading..."
+        case (.simplifiedChinese, .downloadingUpdate): "正在下载..."
+        case (.english, .alreadyLatest): "Already latest"
+        case (.simplifiedChinese, .alreadyLatest): "已是最新版本"
+        case (.english, .updateDownloaded): "Downloaded"
+        case (.simplifiedChinese, .updateDownloaded): "已下载"
+        case (.english, .updateFailed): "Update failed"
+        case (.simplifiedChinese, .updateFailed): "更新失败"
         case (.english, .credentials): "Credentials"
         case (.simplifiedChinese, .credentials): "凭据"
         case (.english, .apiKey): "API Key"
@@ -93,6 +113,8 @@ enum AppLanguage: String, CaseIterable, Codable, Identifiable {
         case (.simplifiedChinese, .maxTokens): "最大 Tokens"
         case (.english, .maxContext): "Max Context"
         case (.simplifiedChinese, .maxContext): "最大上下文"
+        case (.english, .thinkingMode): "Thinking Mode"
+        case (.simplifiedChinese, .thinkingMode): "思考模式"
         case (.english, .add): "Add"
         case (.simplifiedChinese, .add): "添加"
         case (.english, .duplicate): "Duplicate"
@@ -119,6 +141,10 @@ enum AppLanguage: String, CaseIterable, Codable, Identifiable {
         case (.simplifiedChinese, .waiting): "等待中"
         case (.english, .thinking): "Thinking"
         case (.simplifiedChinese, .thinking): "思考中"
+        case (.english, .thinkingDetails): "Thinking"
+        case (.simplifiedChinese, .thinkingDetails): "思考"
+        case (.english, .reasoningTokens): "Reasoning tokens"
+        case (.simplifiedChinese, .reasoningTokens): "推理 Tokens"
         case (.english, .done): "Done"
         case (.simplifiedChinese, .done): "完成"
         case (.english, .error): "Error"
@@ -176,6 +202,10 @@ enum AppText {
     case newFolder
     case deleteChat
     case deleteFolder
+    case chatDeleted
+    case modelDeleted
+    case folderDeleted
+    case undo
     case settings
     case toggleSidebar
     case settingsMenu
@@ -201,6 +231,12 @@ enum AppText {
     case apiPath
     case model
     case resetEndpoint
+    case manualUpdate
+    case checkingUpdate
+    case downloadingUpdate
+    case alreadyLatest
+    case updateDownloaded
+    case updateFailed
     case credentials
     case apiKey
     case authMethod
@@ -210,6 +246,7 @@ enum AppText {
     case temperature
     case maxTokens
     case maxContext
+    case thinkingMode
     case add
     case duplicate
     case delete
@@ -223,6 +260,8 @@ enum AppText {
     case interface
     case waiting
     case thinking
+    case thinkingDetails
+    case reasoningTokens
     case done
     case error
 }

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 @MainActor
@@ -9,6 +10,8 @@ final class AppModel: ObservableObject {
     @Published var selectedSessionID: UUID?
     @Published var prompt: String = ""
     @Published var isRunning = false
+    @Published var updateStatus: ManualUpdateStatus = .idle
+    @Published var pendingUndoDeletion: PendingUndoDeletion?
     @Published var language: AppLanguage {
         didSet {
             UserDefaults.standard.set(language.rawValue, forKey: Self.languageKey)
@@ -17,6 +20,9 @@ final class AppModel: ObservableObject {
     }
 
     private let client = ModelAPIClient()
+    private let updater = AppUpdater()
+    private var pendingUndoHandler: (@MainActor () -> Void)?
+    private var pendingUndoTask: Task<Void, Never>?
     private static let languageKey = "appLanguage.v1"
 
     init() {
@@ -93,11 +99,36 @@ final class AppModel: ObservableObject {
     }
 
     func deleteSelectedProvider() {
-        guard let selectedProviderID else { return }
-        providers.removeAll { $0.id == selectedProviderID }
+        guard let selectedProviderID,
+              let removedIndex = providers.firstIndex(where: { $0.id == selectedProviderID }) else {
+            self.selectedProviderID = providers.first?.id
+            return
+        }
+
+        let removedProvider = providers[removedIndex]
+        self.selectedProviderID = nil
+        providers.remove(at: removedIndex)
         ProviderStore.deleteProvider(for: selectedProviderID)
-        self.selectedProviderID = providers.first?.id
+
+        if providers.isEmpty {
+            self.selectedProviderID = nil
+        } else {
+            let nextIndex = min(removedIndex, providers.count - 1)
+            self.selectedProviderID = providers[nextIndex].id
+        }
         saveProviderMetadata()
+
+        showUndoDeletion(
+            message: language.text(.modelDeleted),
+            systemImage: "slider.horizontal.3"
+        ) { [weak self] in
+            guard let self else { return }
+            if !self.providers.contains(where: { $0.id == removedProvider.id }) {
+                self.providers.insert(removedProvider, at: min(removedIndex, self.providers.count))
+            }
+            self.selectedProviderID = removedProvider.id
+            self.saveProviderMetadata()
+        }
     }
 
     func setProviderEnabled(_ isEnabled: Bool, providerID: UUID) {
@@ -120,6 +151,29 @@ final class AppModel: ObservableObject {
         updateProvider(provider)
     }
 
+    func runManualUpdate() {
+        guard !updateStatus.isInProgress else { return }
+        updateStatus = .checking
+
+        Task {
+            do {
+                let release = try await updater.latestRelease()
+                let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+                guard updater.isRelease(release, newerThan: currentVersion) else {
+                    updateStatus = .upToDate(release.tagName)
+                    return
+                }
+
+                updateStatus = .downloading
+                let result = try await updater.downloadDMG(from: release)
+                updateStatus = .downloaded(result.tagName)
+                NSWorkspace.shared.open(result.fileURL)
+            } catch {
+                updateStatus = .failed(error.localizedDescription)
+            }
+        }
+    }
+
     func newChat() {
         let session = ChatSession()
         sessions.insert(session, at: 0)
@@ -140,13 +194,42 @@ final class AppModel: ObservableObject {
 
     func deleteSelectedChat() {
         guard let selectedSessionID else { return }
-        sessions.removeAll { $0.id == selectedSessionID }
+
+        guard let removedIndex = sessions.firstIndex(where: { $0.id == selectedSessionID }) else {
+            self.selectedSessionID = sessions.first?.id
+            return
+        }
+
+        let removedSession = sessions.remove(at: removedIndex)
+        var placeholderID: UUID?
         if sessions.isEmpty {
-            sessions.append(ChatSession())
+            let placeholder = ChatSession()
+            placeholderID = placeholder.id
+            sessions.append(placeholder)
         }
         self.selectedSessionID = sessions.first?.id
         prompt = ""
         saveSessions()
+
+        showUndoDeletion(
+            message: language.text(.chatDeleted),
+            systemImage: "bubble.left.and.text.bubble.right"
+        ) { [weak self] in
+            guard let self else { return }
+            if let placeholderID,
+               let placeholderIndex = self.sessions.firstIndex(where: { $0.id == placeholderID }),
+               self.sessions[placeholderIndex].title.isEmpty,
+               self.sessions[placeholderIndex].turns.isEmpty,
+               self.sessions[placeholderIndex].prompt.isEmpty,
+               self.sessions[placeholderIndex].answers.isEmpty {
+                self.sessions.remove(at: placeholderIndex)
+            }
+            if !self.sessions.contains(where: { $0.id == removedSession.id }) {
+                self.sessions.insert(removedSession, at: min(removedIndex, self.sessions.count))
+            }
+            self.selectedSessionID = removedSession.id
+            self.saveSessions()
+        }
     }
 
     func sessions(in folderID: UUID?) -> [ChatSession] {
@@ -197,6 +280,12 @@ final class AppModel: ObservableObject {
     func deleteFolder(_ folderID: UUID) {
         guard let folder = folder(id: folderID) else { return }
         let removedFolderIDs = descendantFolderIDs(of: folderID).union([folderID])
+        let removedFolders: [(index: Int, folder: ChatFolder)] = folders.enumerated().compactMap { index, item in
+            removedFolderIDs.contains(item.id) ? (index, item) : nil
+        }
+        let affectedSessions = sessions.filter { session in
+            session.folderID.map(removedFolderIDs.contains) == true
+        }
 
         for index in sessions.indices where sessions[index].folderID.map(removedFolderIDs.contains) == true {
             sessions[index].folderID = folder.parentID
@@ -206,6 +295,35 @@ final class AppModel: ObservableObject {
         folders.removeAll { removedFolderIDs.contains($0.id) }
         saveFolders()
         saveSessions()
+
+        showUndoDeletion(
+            message: language.text(.folderDeleted),
+            systemImage: "folder"
+        ) { [weak self] in
+            guard let self else { return }
+
+            for removed in removedFolders.sorted(by: { $0.index < $1.index }) {
+                if !self.folders.contains(where: { $0.id == removed.folder.id }) {
+                    self.folders.insert(removed.folder, at: min(removed.index, self.folders.count))
+                }
+            }
+
+            for snapshot in affectedSessions {
+                guard let index = self.sessions.firstIndex(where: { $0.id == snapshot.id }) else { continue }
+                self.sessions[index].folderID = snapshot.folderID
+                self.sessions[index].isArchived = snapshot.isArchived
+                self.sessions[index].updatedAt = snapshot.updatedAt
+            }
+
+            self.saveFolders()
+            self.saveSessions()
+        }
+    }
+
+    func undoPendingDeletion() {
+        guard let undo = pendingUndoHandler else { return }
+        clearPendingUndoDeletion()
+        undo()
     }
 
     func submitPrompt() {
@@ -289,9 +407,13 @@ final class AppModel: ObservableObject {
         case let .success(reply):
             sessions[sessionIndex].turns[turnIndex].answers[answerIndex].status = .finished
             sessions[sessionIndex].turns[turnIndex].answers[answerIndex].content = reply.text
+            sessions[sessionIndex].turns[turnIndex].answers[answerIndex].thinkingContent = reply.thinking
+            sessions[sessionIndex].turns[turnIndex].answers[answerIndex].reasoningTokenCount = reply.reasoningTokenCount
         case let .failure(error):
             sessions[sessionIndex].turns[turnIndex].answers[answerIndex].status = .failed(error.localizedDescription)
             sessions[sessionIndex].turns[turnIndex].answers[answerIndex].content = ""
+            sessions[sessionIndex].turns[turnIndex].answers[answerIndex].thinkingContent = nil
+            sessions[sessionIndex].turns[turnIndex].answers[answerIndex].reasoningTokenCount = nil
         }
         sessions[sessionIndex].turns[turnIndex].answers[answerIndex].finishedAt = Date()
         if turnIndex == sessions[sessionIndex].turns.indices.last {
@@ -343,6 +465,38 @@ final class AppModel: ObservableObject {
 
     private func saveFolders() {
         ChatFolderStore.save(folders)
+    }
+
+    private func showUndoDeletion(
+        message: String,
+        systemImage: String,
+        undo: @escaping @MainActor () -> Void
+    ) {
+        pendingUndoTask?.cancel()
+        let deletion = PendingUndoDeletion(message: message, systemImage: systemImage)
+        pendingUndoDeletion = deletion
+        pendingUndoHandler = undo
+        pendingUndoTask = Task { [weak self, deletionID = deletion.id] in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.expireUndoDeletion(id: deletionID)
+            }
+        }
+    }
+
+    private func clearPendingUndoDeletion() {
+        pendingUndoTask?.cancel()
+        pendingUndoTask = nil
+        pendingUndoDeletion = nil
+        pendingUndoHandler = nil
+    }
+
+    private func expireUndoDeletion(id: UUID) {
+        guard pendingUndoDeletion?.id == id else { return }
+        pendingUndoTask = nil
+        pendingUndoDeletion = nil
+        pendingUndoHandler = nil
     }
 
     private func isFolder(_ folderID: UUID?, descendantOf ancestorID: UUID) -> Bool {
@@ -435,4 +589,45 @@ final class AppModel: ObservableObject {
 
         return false
     }
+}
+
+enum ManualUpdateStatus: Equatable {
+    case idle
+    case checking
+    case downloading
+    case upToDate(String)
+    case downloaded(String)
+    case failed(String)
+
+    var isInProgress: Bool {
+        switch self {
+        case .checking, .downloading:
+            true
+        case .idle, .upToDate, .downloaded, .failed:
+            false
+        }
+    }
+
+    func label(language: AppLanguage) -> String? {
+        switch self {
+        case .idle:
+            nil
+        case .checking:
+            language.text(.checkingUpdate)
+        case .downloading:
+            language.text(.downloadingUpdate)
+        case let .upToDate(tag):
+            "\(language.text(.alreadyLatest)) \(tag)"
+        case let .downloaded(tag):
+            "\(language.text(.updateDownloaded)) \(tag)"
+        case let .failed(message):
+            "\(language.text(.updateFailed)): \(message)"
+        }
+    }
+}
+
+struct PendingUndoDeletion: Identifiable, Equatable {
+    let id = UUID()
+    var message: String
+    var systemImage: String
 }

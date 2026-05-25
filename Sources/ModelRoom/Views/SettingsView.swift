@@ -55,6 +55,23 @@ struct SettingsView: View {
                             model.deleteSelectedProvider()
                         }
 
+                        SettingsIconButton(
+                            systemImage: model.updateStatus.isInProgress ? "arrow.triangle.2.circlepath" : "arrow.down.circle",
+                            help: model.language.text(.manualUpdate),
+                            isDisabled: model.updateStatus.isInProgress
+                        ) {
+                            model.runManualUpdate()
+                        }
+
+                        if let updateText = model.updateStatus.label(language: model.language) {
+                            Text(updateText)
+                                .font(.caption2)
+                                .foregroundStyle(updateText.hasPrefix(model.language.text(.updateFailed)) ? .red : .secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .transition(.opacity)
+                        }
+
                         Spacer()
                     }
                     .padding(12)
@@ -117,17 +134,26 @@ struct SettingsView: View {
                 .frame(minWidth: 560)
             }
         }
+        .overlay(alignment: .bottom) {
+            UndoDeletionToastView()
+        }
+        .animation(.spring(response: 0.22, dampingFraction: 0.84), value: model.pendingUndoDeletion?.id)
     }
 
     private var bindingForSelectedProvider: Binding<ProviderConfig>? {
         guard let id = model.selectedProviderID,
-              let index = model.providers.firstIndex(where: { $0.id == id }) else {
+              model.providers.contains(where: { $0.id == id }) else {
             return nil
         }
 
         return Binding {
-            model.providers[index]
+            model.providers.first(where: { $0.id == id }) ?? ProviderConfig(
+                name: "",
+                kind: .openAICompatible,
+                model: ""
+            )
         } set: { newValue in
+            guard model.providers.contains(where: { $0.id == id }) else { return }
             model.updateProvider(newValue)
         }
     }

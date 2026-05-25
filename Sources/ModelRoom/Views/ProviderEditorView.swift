@@ -24,13 +24,18 @@ struct ProviderEditorView: View {
 
     private var bindingForSelectedProvider: Binding<ProviderConfig>? {
         guard let id = model.selectedProviderID,
-              let index = model.providers.firstIndex(where: { $0.id == id }) else {
+              model.providers.contains(where: { $0.id == id }) else {
             return nil
         }
 
         return Binding {
-            model.providers[index]
+            model.providers.first(where: { $0.id == id }) ?? ProviderConfig(
+                name: "",
+                kind: .openAICompatible,
+                model: ""
+            )
         } set: { newValue in
+            guard model.providers.contains(where: { $0.id == id }) else { return }
             model.updateProvider(newValue)
         }
     }
@@ -98,6 +103,16 @@ struct ProviderForm: View {
             Section(model.language.text(.generation)) {
                 TextField(model.language.text(.systemPrompt), text: $provider.systemPrompt, axis: .vertical)
                     .lineLimit(3...6)
+
+                Picker(model.language.text(.thinkingMode), selection: $provider.thinkingMode) {
+                    ForEach(ThinkingMode.allCases) { mode in
+                        Text(mode.displayName(language: model.language)).tag(mode)
+                    }
+                }
+
+                Text(provider.thinkingMode.explanation(language: model.language, apiKind: provider.kind))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 VStack(alignment: .leading) {
                     HStack {
