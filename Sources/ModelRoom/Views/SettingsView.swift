@@ -239,9 +239,6 @@ private struct SettingsProviderRow: View {
     }
 
     private var iconColor: Color {
-        if isSelected {
-            return .primary
-        }
         return provider.isRunnable ? .green : .secondary
     }
 }

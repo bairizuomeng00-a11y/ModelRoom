@@ -6,15 +6,20 @@ struct ContentView: View {
     @State private var isSidebarVisible = true
 
     var body: some View {
-        HSplitView {
-            if isSidebarVisible {
-                SidebarView()
-                    .frame(minWidth: 180, idealWidth: 205, maxWidth: 245)
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-            }
+        ZStack {
+            GlassBackdrop()
+                .ignoresSafeArea()
 
-            ConversationView()
-                .frame(minWidth: 480)
+            HStack(spacing: 0) {
+                if isSidebarVisible {
+                    SidebarView()
+                        .frame(width: 240)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                }
+
+                ConversationView()
+                    .frame(minWidth: 480, maxWidth: .infinity)
+            }
         }
         .background(WindowTransparencyConfigurator())
         .animation(.spring(response: 0.24, dampingFraction: 0.86), value: isSidebarVisible)
@@ -79,5 +84,6 @@ private struct WindowTransparencyConfigurator: NSViewRepresentable {
         guard let window else { return }
         window.isOpaque = false
         window.backgroundColor = .clear
+        window.titlebarSeparatorStyle = .none
     }
 }

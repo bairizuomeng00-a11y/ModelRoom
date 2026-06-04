@@ -4,54 +4,37 @@ struct ConversationView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        ZStack {
-            GlassBackdrop()
+        GeometryReader { proxy in
+            let composerHeight = proxy.size.height * 0.25
+            let transcriptHeight = max(0, proxy.size.height - composerHeight)
 
-            GeometryReader { proxy in
-                let composerHeight = proxy.size.height * 0.25
-                let transcriptHeight = max(0, proxy.size.height - composerHeight - 1)
+            VStack(spacing: 0) {
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        if model.selectedTurns.isEmpty {
+                            EmptyAnswersView(language: model.language)
+                                .frame(maxWidth: .infinity, minHeight: max(220, transcriptHeight * 0.55))
+                        } else {
+                            ForEach(model.selectedTurns) { turn in
+                                QuestionCard(prompt: turn.prompt, language: model.language)
 
-                VStack(spacing: 0) {
-                    ScrollView {
-                        LazyVStack(spacing: 8) {
-                            if model.selectedTurns.isEmpty {
-                                EmptyAnswersView(language: model.language)
-                                    .frame(maxWidth: .infinity, minHeight: max(220, transcriptHeight * 0.55))
-                            } else {
-                                ForEach(model.selectedTurns) { turn in
-                                    QuestionCard(prompt: turn.prompt, language: model.language)
-
-                                    ForEach(turn.answers) { answer in
-                                        AnswerCard(answer: answer, language: model.language)
-                                    }
+                                ForEach(turn.answers) { answer in
+                                    AnswerCard(answer: answer, language: model.language)
                                 }
                             }
                         }
-                        .padding(12)
                     }
-                    .frame(height: transcriptHeight)
-
-                    Divider()
-                        .opacity(0.35)
-
-                    ComposerView()
-                        .padding(.horizontal, 12)
-                        .padding(.top, 10)
-                        .padding(.bottom, 14)
-                        .frame(height: composerHeight)
-                        .background {
-                            Rectangle()
-                                .fill(Color(nsColor: .controlBackgroundColor))
-                                .opacity(0.34)
-                            Rectangle()
-                                .fill(.ultraThinMaterial)
-                                .opacity(0.18)
-                        }
-                        .overlay(alignment: .top) {
-                            Divider()
-                                .opacity(0.42)
-                        }
+                    .padding(12)
                 }
+                .scrollContentBackground(.hidden)
+                .background(Color.clear)
+                .frame(height: transcriptHeight)
+
+                ComposerView()
+                    .padding(.horizontal, 12)
+                    .padding(.top, 10)
+                    .padding(.bottom, 14)
+                    .frame(height: composerHeight)
             }
         }
     }

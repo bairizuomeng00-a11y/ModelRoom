@@ -116,20 +116,6 @@ private struct SidebarBackground: View {
             )
             .blendMode(.plusLighter)
         }
-        .overlay(alignment: .trailing) {
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            .white.opacity(0.36),
-                            .black.opacity(0.020)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .frame(width: 1)
-        }
     }
 }
 
